@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "twilist-rss"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "twscrape",
+  "boto3",
+  "python-dotenv",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/twilist_rss"]

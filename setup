@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+uv sync
+
+# Patch twscrape's xclid.py: X's bundle map contains unquoted JS keys
+# which break json.loads. Use regex extraction instead.
+XCLID=".venv/lib/$(ls .venv/lib)/site-packages/twscrape/xclid.py"
+python3 - "$XCLID" <<'PYEOF'
+import sys, re, pathlib
+
+path = pathlib.Path(sys.argv[1])
+src = path.read_text()
+
+old = '''\
+def get_scripts_list(text: str):
+    scripts = text.split('e=>e+"."+')[1].split('[e]+"a.js"')[0]
+    try:
+        for k, v in json.loads(scripts).items():
+            yield script_url(k, f"{v}a")
+    except json.decoder.JSONDecodeError as e:
+        raise Exception("Failed to parse scripts") from e'''
+
+new = '''\
+def get_scripts_list(text: str):
+    # Patched: X's bundle map contains unquoted JS keys which break
+    # json.loads. Use regex to extract only quoted key-value pairs.
+    scripts = text.split('e=>e+"."+')[1].split('[e]+"a.js"')[0]
+    for m in re.finditer(r'"([^"]+)"\\s*:\\s*"([^"]+)"', scripts):
+        yield script_url(m.group(1), f"{m.group(2)}a")'''
+
+if old in src:
+    path.write_text(src.replace(old, new))
+    print("twscrape xclid.py patched.")
+elif 'Patched:' in src:
+    print("twscrape xclid.py already patched.")
+else:
+    print("WARNING: twscrape xclid.py patch target not found. Manual check needed.")
+PYEOF
+
+echo "Setup complete."
